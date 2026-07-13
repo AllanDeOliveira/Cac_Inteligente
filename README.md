@@ -1,25 +1,46 @@
-# Cáceres Inteligente 📍
+# Cáceres Inteligente 🏛️📱
 
-O **Cáceres Inteligente** é um aplicativo mobile e web focado na valorização, resgate e turismo do patrimônio histórico da cidade de Cáceres, Mato Grosso (conhecida como a *Princesinha do Paraguai*). 
+O **Cáceres Inteligente** é um aplicativo móvel voltado para o turismo histórico-cultural e a promoção da acessibilidade na histórica cidade de Cáceres, no estado de Mato Grosso (conhecida como a *Princesinha do Paraguai*). O projeto combina geolocalização, leitura de placas com QR Code e áudio guia por síntese de voz para proporcionar uma experiência imersiva e inclusiva aos visitantes e moradores da cidade.
 
-O projeto funciona permitindo que moradores e turistas encontrem pontos históricos pelo mapa e, ao visitá-los, realizem o escaneamento de placas de **QR Code** instaladas nos monumentos para abrir a ficha histórica detalhada acompanhada de um **áudio-guia por voz** nativo.
+Este aplicativo é parte integrante de um **Trabalho de Mestrado**, com foco na preservação do patrimônio histórico e na democratização do acesso à informação cultural por meio de tecnologias digitais.
+
+---
+
+## 🌟 Recursos Principais
+
+- **Leitura de QR Code 📷**: Permite escanear as placas físicas instaladas nos monumentos históricos de Cáceres usando a câmera do dispositivo, abrindo instantaneamente a ficha histórica do local.
+- **Áudio Guia (Acessibilidade) 🔊**: Utiliza síntese de voz (Text-to-Speech) para narrar a história e curiosidades dos monumentos em português, promovendo inclusão para pessoas com deficiência visual ou dificuldades de leitura.
+- **Mapa Interativo 🗺️**: Integração com mapas para exibição georreferenciada dos monumentos históricos na cidade de Cáceres-MT, auxiliando o usuário a se localizar e planejar rotas de visitação.
+- **Ficha Histórica Completa 📜**: Informações detalhadas sobre a história e curiosidades dos principais monumentos, incluindo:
+  - **Marco do Jauru** (Símbolo geopolítico de 1754)
+  - **Catedral de São Luiz** (Arquitetura neogótica de 1919)
+  - **Sede da Fazenda Jacobina** (Histórica fazenda de 1775)
+  - **Porto antigo e Rio Paraguai** (Artéria comercial e histórica da cidade)
+  - **Igreja Perpétuo Socorro** (Bairro Perpétuo Socorro, construído nos anos 1950)
+- **Design Regional Elegante 🌿**: A identidade visual do aplicativo utiliza uma paleta de cores inspirada no Pantanal mato-grossense (tons de cal e verde-sálvia), proporcionando uma interface leve, legível e de aspecto premium.
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
 ### Aplicativo Mobile (Fase 2 - Atual)
-* **React Native + Expo** (Framework multiplataforma para Android e iOS)
-* **expo-camera** (Scanner nativo de QR Code)
-* **expo-speech** (Síntese de voz nativa - Text-to-Speech)
-* **react-native-maps** (Mapa interativo com marcações de pins)
+O projeto móvel foi construído utilizando as seguintes tecnologias e bibliotecas do ecossistema:
+- **React Native**: Framework para desenvolvimento de aplicativos móveis multiplataforma.
+- **Expo SDK 57**: Plataforma e conjunto de ferramentas para desenvolvimento ágil com React Native.
+- **Expo Camera**: Para acesso e controle da câmera durante a leitura dos QR Codes.
+- **Expo Speech**: Para reprodução de áudio guia via conversão de texto em fala.
+- **React Native Maps**: Para renderização e interação com mapas e marcadores geográficos.
+- **React Native Safe Area Context**: Tratamento de espaçamentos em telas com entalhes (notches) e bordas arredondadas.
+- **Expo Font & Google Fonts**: Tipografias personalizadas (*Archivo* para legibilidade do corpo de texto e *EB Garamond* para títulos tradicionais).
 
 ### Protótipo Web (Fase 1 - Histórico)
-* **HTML5 Semântico e Vanilla CSS** (Layout responsivo com design escuro e glassmorphism)
-* **html5-qrcode** (Leitor de câmera no navegador)
-* **Leaflet.js** (Mapa dinâmico com filtros escuros de design)
+No início do projeto, foi desenvolvido um protótipo para navegadores com tecnologias fundamentais:
+- **HTML5 Semântico e Vanilla CSS** (Layout responsivo com design escuro e glassmorphism)
+- **html5-qrcode** (Leitor de câmera no navegador)
+- **Leaflet.js** (Mapa dinâmico com filtros escuros de design)
 
-> O código do protótipo web foi preservado na tag [`fase-1-web-prototype`](../../tree/fase-1-web-prototype). Para acessá-lo localmente: `git checkout fase-1-web-prototype`.
+> [!NOTE]
+> O código do protótipo web da Fase 1 foi removido do branch principal e está preservado na tag [`fase-1-web-prototype`](../../tree/fase-1-web-prototype). Para acessá-lo localmente, execute `git checkout fase-1-web-prototype`.
 
 ---
 
@@ -31,55 +52,18 @@ O projeto funciona permitindo que moradores e turistas encontrem pontos históri
 │   ├── assets/               # Ícones do app e imagens dos patrimônios históricos
 │   └── package.json          # Configurações e dependências do projeto
 │
-└── README.md                 # Documentação principal do projeto
+├── LICENSE                   # Licença GNU GPL v3.0 do projeto
+└── README.md                 # Documentação principal do repositório (esta página)
 ```
 
-> **Nota:** o Protótipo Web (Fase 1) foi removido do branch principal e está preservado na tag `fase-1-web-prototype`.
+---
+
+## 🎓 Contexto Acadêmico
+
+Este projeto está sendo desenvolvido no âmbito de pesquisa de pós-graduação.
 
 ---
 
-## 🏛️ Patrimônios Históricos Cadastrados no Protótipo
+## 📄 Licença
 
-1. **Marco do Jauru** (Praça Barão do Rio Branco) - Peça de mármore português erguida em 1754 para demarcar o limite entre os impérios português e espanhol pelo Tratado de Madri.
-2. **Catedral de São Luiz de Cáceres** (Praça Barão do Rio Branco) - Imponente catedral de estilo neogótica construída a partir de 1919.
-3. **Sede da Fazenda Jacobina** - A mais rica fazenda de gado, açúcar e aguardente da província de Mato Grosso no período imperial.
-4. **Porto de Cáceres e Rio Paraguai** - Artéria comercial vital que ligava a cidade com a bacia platina de Montevidéu e Buenos Aires.
-5. **Igreja de Nossa Senhora do Perpétuo Socorro** - Importante marco de relevância religiosa fundado na década de 1950.
-
----
-
-## 🚀 Como Executar o Aplicativo Mobile (Expo)
-
-### Pré-requisitos
-* **Node.js** instalado na máquina.
-* Aplicativo **Expo Go** instalado no celular (disponível para Android e iOS).
-* **Android Studio** instalado (opcional, caso queira emular no computador).
-
-### Passo a Passo
-1. Entre na pasta do projeto mobile:
-   ```bash
-   cd caceres-inteligente
-   ```
-2. Instale as dependências de pacotes:
-   ```bash
-   npm install
-   ```
-3. Inicie o servidor de desenvolvimento do Expo:
-   ```bash
-   npx expo start
-   ```
-4. No terminal aparecerá um **QR Code**:
-   * **No Android:** Abra o *Expo Go*, clique em *Scan QR Code* e leia o código.
-   * **No iOS:** Abra a *Câmera nativa do iPhone*, aponte para o QR Code e toque no link para abrir no *Expo Go*.
-
----
-
-## 💻 Configurações do Ambiente Android (Desenvolvedores)
-
-Se você deseja executar o emulador do Android Studio na sua máquina, certifique-se de configurar as seguintes variáveis de ambiente no Windows:
-
-* **ANDROID_HOME**: `C:\Users\<Seu-Usuario>\AppData\Local\Android\Sdk`
-* **JAVA_HOME**: `C:\Program Files\Android\Android Studio\jbr` (JDK integrado do Studio)
-* **Adições ao Path**: 
-  * `%ANDROID_HOME%\emulator`
-  * `%ANDROID_HOME%\platform-tools`
+Este projeto está licensed sob a licença **GNU General Public License v3.0 (GPLv3)** — uma licença copyleft forte que garante que o software permaneça livre e de código aberto. Qualquer trabalho derivado ou redistribuição deste projeto também deve ter seu código-fonte aberto sob os mesmos termos. Consulte o arquivo [LICENSE](file:///LICENSE) para ler os termos completos.
