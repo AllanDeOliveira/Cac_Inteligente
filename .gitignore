@@ -1,0 +1,9 @@
+# Configurações locais de IDEs (ex: WebStorm, IntelliJ, Android Studio)
+.idea/
+
+# Arquivos residuais do sistema/compilação
+nul
+caceres-inteligente/nul
+**/nul
+.DS_Store
+Thumbs.db
