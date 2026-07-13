@@ -1,24 +1,40 @@
 {
   "expo": {
-    "name": "caceres-inteligente",
+    "name": "Cáceres Inteligente",
     "slug": "caceres-inteligente",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.caceresinteligente.app"
     },
     "android": {
+      "package": "com.caceresinteligente.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "COLE_AQUI_A_CHAVE_DO_GOOGLE_MAPS_ANDROID"
+        }
       }
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Cáceres Inteligente usa a câmera para ler o QR Code das placas dos monumentos."
+        }
+      ]
+    ]
   }
 }

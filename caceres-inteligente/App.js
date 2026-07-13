@@ -6,19 +6,37 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  SafeAreaView,
+  BackHandler,
   StatusBar,
   Vibration,
-  Dimensions,
-  ActivityIndicator,
-  Platform
+  ActivityIndicator
 } from 'react-native';
+// O SafeAreaView do react-native é no-op no Android, e o Expo 54+ força edge-to-edge
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Speech from 'expo-speech';
 import MapView, { Marker, Callout } from 'react-native-maps';
+import { useFonts } from 'expo-font';
+import { EBGaramond_600SemiBold } from '@expo-google-fonts/eb-garamond';
+import { Archivo_400Regular, Archivo_500Medium, Archivo_600SemiBold } from '@expo-google-fonts/archivo';
 
-// Resolução da Tela
-const { width, height } = Dimensions.get('window');
+// Cal e verde-sálvia do Pantanal: destaque em tom suave, nunca escuro nem saturado
+const C = {
+  marble: '#EAEEE4',   // papel com leve tom sálvia
+  ink: '#1C211C',
+  muted: '#5B6259',
+  bronze: '#6E8B5B',   // verde-sálvia médio: o destaque do app
+  bronzeInk: '#4C6440', // verde mais fechado, para texto e botões
+  night: '#141816',
+};
+const WASH = 'rgba(28, 33, 28, 0.035)';
+const HAIR = StyleSheet.hairlineWidth;
+const F = {
+  display: 'EBGaramond_600SemiBold',
+  body: 'Archivo_400Regular',
+  medium: 'Archivo_500Medium',
+  semi: 'Archivo_600SemiBold',
+};
 
 // Dicionário de Imagens Locais (React Native exige imports estáticos no require)
 const MONUMENT_IMAGES = {
@@ -103,6 +121,70 @@ const MONUMENTS = [
   }
 ];
 
+// O Marco do Jauru é, no fundo, um par de coordenadas cravado em pedra. Mostramos as dos cinco.
+const pad = (n) => String(n).padStart(2, '0');
+const dms = (v, pos, neg) => {
+  const t = Math.round(Math.abs(v) * 3600);
+  return `${Math.floor(t / 3600)}°${pad(Math.floor((t % 3600) / 60))}'${pad(t % 60)}"${v >= 0 ? pos : neg}`;
+};
+const coords = (lat, lng) => `${dms(lat, 'N', 'S')} · ${dms(lng, 'E', 'W')}`;
+
+// "Século XVIII - 1754" → "XVIII" no crachá, "Século XVIII · 1754" na ficha
+const century = (period) => period.split(' ')[1];
+const engraved = (period) => period.replace(' - ', ' · ');
+
+if (__DEV__) {
+  console.assert(dms(-16.0734, 'N', 'S') === '16°04\'24"S', 'dms: conversão básica');
+  console.assert(dms(-16.99999, 'N', 'S') === '17°00\'00"S', 'dms: 60" precisa subir para o grau seguinte');
+}
+
+// Régua de agrimensor: a assinatura do app, e o gesto que o Marco do Jauru repete desde 1754
+const TickRule = ({ ticks = 9 }) => (
+  <View style={styles.rule}>
+    {Array.from({ length: ticks }, (_, i) => <View key={i} style={styles.tick} />)}
+  </View>
+);
+
+const ScreenHeader = ({ title, sub }) => (
+  <View style={styles.header}>
+    <Text style={styles.headerTitle}>{title}</Text>
+    <TickRule />
+    <Text style={styles.headerSub}>{sub}</Text>
+  </View>
+);
+
+// A mira do scanner, usada em dois tamanhos: no visor da câmera e como marca do botão
+const CORNERS = [
+  { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0 },
+  { top: 0, right: 0, borderBottomWidth: 0, borderLeftWidth: 0 },
+  { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0 },
+  { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0 },
+];
+
+const Reticle = ({ size, arm, weight, color }) => (
+  <View style={{ width: size, height: size }}>
+    {CORNERS.map((corner, i) => (
+      <View
+        key={i}
+        style={[{ position: 'absolute', width: arm, height: arm, borderColor: color, borderWidth: weight }, corner]}
+      />
+    ))}
+  </View>
+);
+
+const NavItem = ({ label, active, onPress }) => (
+  <TouchableOpacity
+    style={styles.navItem}
+    onPress={onPress}
+    accessibilityRole="button"
+    accessibilityLabel={label}
+    accessibilityState={{ selected: active }}
+  >
+    <Text style={[styles.navText, active && styles.navTextActive]}>{label}</Text>
+    <View style={[styles.navUnderline, active && styles.navUnderlineActive]} />
+  </TouchableOpacity>
+);
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
   const [selectedMonument, setSelectedMonument] = useState(null);
@@ -120,12 +202,12 @@ export default function App() {
   // Referência para o Mapa
   const mapRef = useRef(null);
 
-  // Efeito para desligar câmera e fala se o app fechar ou mudar de tela
-  useEffect(() => {
-    return () => {
-      Speech.stop();
-    };
-  }, []);
+  const [fontsLoaded] = useFonts({
+    EBGaramond_600SemiBold,
+    Archivo_400Regular,
+    Archivo_500Medium,
+    Archivo_600SemiBold,
+  });
 
   const navigateTo = (screen) => {
     // Para a fala ao mudar de tela
@@ -135,16 +217,38 @@ export default function App() {
     if (currentScreen !== 'details' && currentScreen !== 'splash') {
       setLastScreen(currentScreen);
     }
-    
+
     if (screen === 'scanner') {
       setScanned(false);
       setCameraActive(true);
     } else {
       setCameraActive(false);
     }
-    
+
     setCurrentScreen(screen);
   };
+
+  // Para a fala ao desmontar o app (a troca de tela é tratada em navigateTo)
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
+
+  // Botão físico de voltar do Android: ficha e scanner voltam; mapa e lista saem do app
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (currentScreen === 'details' || currentScreen === 'scanner') {
+        navigateTo(lastScreen);
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [currentScreen, lastScreen]);
+
+  // Fundo de cal enquanto as fontes carregam, para não piscar branco
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.marble }} />;
 
   const handleOpenDetails = (id) => {
     const monument = MONUMENTS.find(m => m.id === id);
@@ -215,32 +319,33 @@ export default function App() {
   if (currentScreen === 'splash') {
     return (
       <View style={styles.splashContainer}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="dark-content" />
         <View style={styles.splashContent}>
-          <View style={styles.logoIcon}>
-            <Text style={styles.logoIconText}>📍</Text>
-          </View>
-          <Text style={styles.splashTitle}>Cáceres <Text style={styles.goldText}>Inteligente</Text></Text>
-          <Text style={styles.splashTagline}>Explore a história guardada nos monumentos da Princesinha do Paraguai.</Text>
-          
-          <View style={styles.splashCard}>
-            <Text style={styles.splashCardTitle}>Como funciona?</Text>
-            <View style={styles.stepRow}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
-              <Text style={styles.stepText}>Ache um local com a placa do projeto.</Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
-              <Text style={styles.stepText}>Abra o scanner no aplicativo.</Text>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
-              <Text style={styles.stepText}>Escaneie o QR Code e ouça a história!</Text>
-            </View>
+          <Text style={styles.splashEyebrow}>Mato Grosso · fundada em 1778</Text>
+          <Text style={styles.splashTitle}>CÁCERES</Text>
+          <Text style={styles.splashSubtitle}>Inteligente</Text>
+          <TickRule ticks={11} />
+          <Text style={styles.splashCoord}>{coords(-16.0718, -57.6787)}</Text>
+
+          <Text style={styles.splashTagline}>
+            Cinco monumentos, cinco placas. Aponte a câmera e ouça a história de cada um.
+          </Text>
+
+          <View style={styles.steps}>
+            {[
+              'Ache a placa do projeto no monumento.',
+              'Toque no botão da câmera.',
+              'Aponte para o QR Code e ouça.',
+            ].map((step, i) => (
+              <View key={i} style={styles.stepRow}>
+                <Text style={styles.stepNumber}>{i + 1}</Text>
+                <Text style={styles.stepText}>{step}</Text>
+              </View>
+            ))}
           </View>
 
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => navigateTo('map')}>
-            <Text style={styles.btnPrimaryText}>Começar Exploração  ➔</Text>
+          <TouchableOpacity style={styles.btnPrimary} onPress={() => navigateTo('map')} accessibilityRole="button">
+            <Text style={styles.btnPrimaryText}>Explorar o mapa</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -249,7 +354,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.appContainer}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       
       {/* CORPO DO APLICATIVO (Telas Ativas) */}
       <View style={styles.mainContainer}>
@@ -257,10 +362,7 @@ export default function App() {
         {/* ================= TELA: MAPA ================= */}
         {currentScreen === 'map' && (
           <View style={StyleSheet.absoluteFillObject}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Explorar Cáceres</Text>
-              <Text style={styles.headerSub}>Encontre pontos históricos perto de você</Text>
-            </View>
+            <ScreenHeader title="Explorar" sub="Cinco monumentos no centro histórico e arredores." />
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -270,26 +372,25 @@ export default function App() {
                 latitudeDelta: 0.02,
                 longitudeDelta: 0.02,
               }}
-              userInterfaceStyle="dark"
             >
               {MONUMENTS.map(monument => (
                 <Marker
                   key={monument.id}
                   coordinate={{ latitude: monument.lat, longitude: monument.lng }}
-                  pinColor="#dfb15b"
+                  pinColor={C.bronze}
                 >
                   <Callout tooltip onPress={() => handleOpenDetails(monument.id)}>
-                    <View style={styles.calloutContainer}>
+                    <View style={styles.callout}>
+                      <Text style={styles.calloutCentury}>{century(monument.period)}</Text>
                       <Text style={styles.calloutTitle}>{monument.title}</Text>
-                      <Text style={styles.calloutPeriod}>{monument.period}</Text>
-                      <Text style={styles.calloutBtn}>Toque para ver a história</Text>
+                      <Text style={styles.calloutCoord}>{coords(monument.lat, monument.lng)}</Text>
                     </View>
                   </Callout>
                 </Marker>
               ))}
             </MapView>
             <View style={styles.mapTip}>
-              <Text style={styles.mapTipText}>Toque nos pins dourados para explorar</Text>
+              <Text style={styles.mapTipText}>Toque num marcador para abrir a ficha</Text>
             </View>
           </View>
         )}
@@ -297,21 +398,18 @@ export default function App() {
         {/* ================= TELA: SCANNER ================= */}
         {currentScreen === 'scanner' && (
           <View style={StyleSheet.absoluteFillObject}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Escanear QR Code</Text>
-              <Text style={styles.headerSub}>Aponte a câmera para o código no monumento</Text>
-            </View>
-            
+            <ScreenHeader title="Escanear" sub="Aponte para o QR Code da placa do monumento." />
+
             <View style={styles.cameraContainer}>
               {!cameraPermission ? (
                 <View style={styles.permissionContainer}>
-                  <Text style={styles.permissionText}>Carregando permissões...</Text>
+                  <ActivityIndicator color={C.bronze} />
                 </View>
               ) : !cameraPermission.granted ? (
                 <View style={styles.permissionContainer}>
-                  <Text style={styles.permissionText}>Acesso à câmera é necessário para ler o QR Code.</Text>
-                  <TouchableOpacity style={styles.btnSecondary} onPress={requestCameraPermission}>
-                    <Text style={styles.btnSecondaryText}>Conceder Permissão</Text>
+                  <Text style={styles.permissionText}>O scanner precisa da câmera para ler o QR Code da placa.</Text>
+                  <TouchableOpacity style={styles.btnPermission} onPress={requestCameraPermission} accessibilityRole="button">
+                    <Text style={styles.btnPermissionText}>Permitir câmera</Text>
                   </TouchableOpacity>
                 </View>
               ) : cameraActive ? (
@@ -324,23 +422,14 @@ export default function App() {
                   onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
                 >
                   <View style={styles.scannerOverlay}>
-                    <View style={styles.scannerTarget}>
-                      <View style={[styles.corner, styles.topLeft]} />
-                      <View style={[styles.corner, styles.topRight]} />
-                      <View style={[styles.corner, styles.bottomLeft]} />
-                      <View style={[styles.corner, styles.bottomRight]} />
-                    </View>
+                    <Reticle size={224} arm={26} weight={3} color={C.bronze} />
                   </View>
                 </CameraView>
               ) : (
                 <View style={styles.permissionContainer}>
-                  <ActivityIndicator size="large" color="#dfb15b" />
+                  <ActivityIndicator size="large" color={C.bronze} />
                 </View>
               )}
-            </View>
-            
-            <View style={styles.scannerTip}>
-              <Text style={styles.scannerTipText}>Caso não esteja em Cáceres, use a aba "Simular" para testar o escaneamento.</Text>
             </View>
           </View>
         )}
@@ -348,127 +437,99 @@ export default function App() {
         {/* ================= TELA: LISTA ================= */}
         {currentScreen === 'list' && (
           <ScrollView contentContainerStyle={styles.listScroll}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Patrimônio Histórico</Text>
-              <Text style={styles.headerSub}>Lista de monumentos cadastrados</Text>
-            </View>
-            
+            <ScreenHeader title="Patrimônio" sub="Do Marco de 1754 à igreja dos anos 1950." />
+
             {MONUMENTS.map(monument => (
               <TouchableOpacity
                 key={monument.id}
-                style={styles.monumentCard}
+                style={styles.card}
                 onPress={() => handleOpenDetails(monument.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${monument.title}, ${monument.period}`}
               >
                 <Image source={MONUMENT_IMAGES[monument.id]} style={styles.cardImage} />
                 <View style={styles.cardInfo}>
-                  <Text style={styles.cardBadge}>{monument.period.split(" ")[0]}</Text>
+                  <Text style={styles.cardCentury}>{century(monument.period)}</Text>
                   <Text style={styles.cardTitle}>{monument.title}</Text>
-                  <Text style={styles.cardDesc} numberOfLines={2}>{monument.history}</Text>
+                  <Text style={styles.cardCoord}>{coords(monument.lat, monument.lng)}</Text>
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         )}
 
-        {/* ================= TELA: SIMULADOR ================= */}
-        {currentScreen === 'simulator' && (
-          <ScrollView contentContainerStyle={styles.listScroll}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Simulador de Testes</Text>
-              <Text style={styles.headerSub}>Simule o escaneamento de placas históricas</Text>
-            </View>
-            
-            <View style={styles.simulatorCard}>
-              <Text style={styles.simulatorCardText}>
-                Como você está desenvolvendo em ambiente simulado ou computador, use estes botões para testar o comportamento que ocorreria ao ler a placa no local.
-              </Text>
-              
-              <Text style={styles.simulatorSectionTitle}>Simulação Rápida</Text>
-              {MONUMENTS.map(monument => (
-                <TouchableOpacity
-                  key={monument.id}
-                  style={styles.btnSimItem}
-                  onPress={() => handleOpenDetails(monument.id)}
-                >
-                  <Text style={styles.btnSimItemText}>{monument.title}</Text>
-                  <Text style={styles.btnSimArrow}>➔</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        )}
-
         {/* ================= TELA: DETALHES ================= */}
         {currentScreen === 'details' && selectedMonument && (
           <ScrollView contentContainerStyle={styles.detailContainer}>
-            <View style={styles.detailsHero}>
-              <Image source={MONUMENT_IMAGES[selectedMonument.id]} style={styles.detailHeroImage} />
-              <View style={styles.detailHeroGradient} />
-              
-              <TouchableOpacity style={styles.btnBackCircle} onPress={() => navigateTo(lastScreen)}>
-                <Text style={styles.btnBackCircleText}>◀</Text>
+            {/* Foto inteira, sem véu por cima: a inscrição vem embaixo, gravada na pedra */}
+            <View style={styles.hero}>
+              <Image source={MONUMENT_IMAGES[selectedMonument.id]} style={styles.heroImage} />
+              <TouchableOpacity
+                style={styles.btnBack}
+                onPress={() => navigateTo(lastScreen)}
+                accessibilityRole="button"
+                accessibilityLabel="Voltar"
+              >
+                <Text style={styles.btnBackText}>←</Text>
               </TouchableOpacity>
-              
-              <View style={styles.detailHeroInfo}>
-                <Text style={styles.detailBadgeText}>{selectedMonument.period}</Text>
-                <Text style={styles.detailHeroTitle}>{selectedMonument.title}</Text>
-              </View>
+            </View>
+
+            <View style={styles.cartouche}>
+              <Text style={styles.detailEyebrow}>{engraved(selectedMonument.period)}</Text>
+              <Text style={styles.detailTitle}>{selectedMonument.title}</Text>
+              <TickRule ticks={11} />
+              <Text style={styles.detailCoord}>{coords(selectedMonument.lat, selectedMonument.lng)}</Text>
             </View>
 
             <View style={styles.detailContent}>
-              {/* Player do Áudio Guia */}
-              <View style={styles.audioPlayerCard}>
+              <View style={styles.audioRow}>
                 <View style={styles.audioInfo}>
-                  <Text style={styles.audioIcon}>{isSpeaking ? "🔊" : "🔈"}</Text>
-                  <View>
-                    <Text style={styles.audioTitle}>Áudio Guia</Text>
-                    <Text style={styles.audioStatus}>
-                      {isSpeaking ? "Reproduzindo áudio-guia..." : "Toque no Play para ouvir"}
-                    </Text>
-                  </View>
+                  <Text style={styles.audioTitle}>Áudio-guia</Text>
+                  <Text style={styles.audioStatus}>
+                    {isSpeaking ? 'Reproduzindo…' : 'Narração em voz alta'}
+                  </Text>
                 </View>
-                
-                <TouchableOpacity style={styles.btnPlay} onPress={handleSpeak}>
-                  <Text style={styles.btnPlayText}>{isSpeaking ? "⏹ Parar" : "▶ Ouvir"}</Text>
+                <TouchableOpacity
+                  style={styles.btnPlay}
+                  onPress={handleSpeak}
+                  accessibilityRole="button"
+                  accessibilityLabel={isSpeaking ? 'Parar narração' : 'Ouvir narração'}
+                >
+                  <Text style={styles.btnPlayText}>{isSpeaking ? 'Parar' : 'Ouvir'}</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Abas */}
-              <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                  style={[styles.tabBtn, activeDetailTab === 'history' && styles.tabBtnActive]}
-                  onPress={() => setActiveDetailTab('history')}
-                >
-                  <Text style={[styles.tabBtnText, activeDetailTab === 'history' && styles.tabBtnTextActive]}>História</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tabBtn, activeDetailTab === 'curiosities' && styles.tabBtnActive]}
-                  onPress={() => setActiveDetailTab('curiosities')}
-                >
-                  <Text style={[styles.tabBtnText, activeDetailTab === 'curiosities' && styles.tabBtnTextActive]}>Curiosidades</Text>
-                </TouchableOpacity>
+              <View style={styles.tabs}>
+                {[['history', 'História'], ['curiosities', 'Curiosidades']].map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={styles.tabBtn}
+                    onPress={() => setActiveDetailTab(key)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: activeDetailTab === key }}
+                  >
+                    <Text style={[styles.tabText, activeDetailTab === key && styles.tabTextActive]}>{label}</Text>
+                    <View style={[styles.tabRule, activeDetailTab === key && styles.tabRuleActive]} />
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              {/* Conteúdo das Abas */}
               {activeDetailTab === 'history' ? (
                 <Text style={styles.historyText}>{selectedMonument.history}</Text>
               ) : (
-                <View style={styles.curiositiesContainer}>
-                  {selectedMonument.curiosities.map((item, idx) => (
-                    <View key={idx} style={styles.curiosityRow}>
-                      <Text style={styles.curiosityBullet}>✦</Text>
-                      <Text style={styles.curiosityText}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
+                selectedMonument.curiosities.map((item, idx) => (
+                  <View key={idx} style={styles.curiosityRow}>
+                    <View style={styles.curiosityMark} />
+                    <Text style={styles.curiosityText}>{item}</Text>
+                  </View>
+                ))
               )}
 
-              {/* Card de Localização */}
-              <View style={styles.locationCard}>
-                <Text style={styles.locationCardTitle}>Localização</Text>
-                <Text style={styles.locationCardDesc}>{selectedMonument.address}</Text>
-                <TouchableOpacity style={styles.btnSecondary} onPress={handleFocusOnMap}>
-                  <Text style={styles.btnSecondaryText}>🗺 Ver no Mapa</Text>
+              <View style={styles.locationBlock}>
+                <Text style={styles.locationLabel}>Onde fica</Text>
+                <Text style={styles.locationAddress}>{selectedMonument.address}</Text>
+                <TouchableOpacity style={styles.btnSecondary} onPress={handleFocusOnMap} accessibilityRole="button">
+                  <Text style={styles.btnSecondaryText}>Ver no mapa</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -480,623 +541,184 @@ export default function App() {
       {/* ================= MENU DE NAVEGAÇÃO INFERIOR ================= */}
       {currentScreen !== 'splash' && currentScreen !== 'details' && (
         <View style={styles.navBar}>
-          <TouchableOpacity
-            style={[styles.navItem, currentScreen === 'map' && styles.navItemActive]}
-            onPress={() => navigateTo('map')}
-          >
-            <Text style={styles.navIcon}>🗺</Text>
-            <Text style={[styles.navText, currentScreen === 'map' && styles.navTextActive]}>Mapa</Text>
-          </TouchableOpacity>
+          <NavItem label="Mapa" active={currentScreen === 'map'} onPress={() => navigateTo('map')} />
 
+          {/* A marca do botão é a própria mira do scanner, em miniatura */}
           <TouchableOpacity
-            style={[styles.navItem, currentScreen === 'list' && styles.navItemActive]}
-            onPress={() => navigateTo('list')}
-          >
-            <Text style={styles.navIcon}>📜</Text>
-            <Text style={[styles.navText, currentScreen === 'list' && styles.navTextActive]}>Locais</Text>
-          </TouchableOpacity>
-
-          {/* Botão de Scanner Central */}
-          <TouchableOpacity
-            style={styles.navScannerBtn}
+            style={[styles.navScanner, currentScreen === 'scanner' && styles.navScannerActive]}
             onPress={() => navigateTo('scanner')}
+            accessibilityRole="button"
+            accessibilityLabel="Escanear QR Code"
+            accessibilityState={{ selected: currentScreen === 'scanner' }}
           >
-            <View style={[styles.navScannerBtnInner, currentScreen === 'scanner' && styles.navScannerBtnInnerActive]}>
-              <Text style={styles.scannerIconText}>📷</Text>
-            </View>
+            <Reticle size={22} arm={7} weight={2} color={C.marble} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.navItem, currentScreen === 'simulator' && styles.navItemActive]}
-            onPress={() => navigateTo('simulator')}
-          >
-            <Text style={styles.navIcon}>⚙️</Text>
-            <Text style={[styles.navText, currentScreen === 'simulator' && styles.navTextActive]}>Simular</Text>
-          </TouchableOpacity>
+          <NavItem label="Locais" active={currentScreen === 'list'} onPress={() => navigateTo('list')} />
         </View>
       )}
     </SafeAreaView>
   );
 }
 
-// Estilos de Interface
+// Superfícies gravadas, não flutuantes: filete de bronze, cantos cortados, nenhuma sombra.
 const styles = StyleSheet.create({
-  appContainer: {
-    flex: 1,
-    backgroundColor: '#08100c',
-  },
-  mainContainer: {
-    flex: 1,
-  },
-  splashContainer: {
-    flex: 1,
-    backgroundColor: '#050d09',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  splashContent: {
-    width: '90%',
-    maxWidth: 400,
-    alignItems: 'center',
-    padding: 20,
-  },
-  logoIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 22,
-    backgroundColor: 'rgba(223, 177, 91, 0.15)',
-    borderWidth: 2,
-    borderColor: '#dfb15b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoIconText: {
-    fontSize: 34,
-  },
-  splashTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
-    marginBottom: 8,
-  },
-  goldText: {
-    color: '#dfb15b',
-  },
-  splashTagline: {
-    color: '#9ca3af',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 30,
-  },
-  splashCard: {
-    width: '100%',
-    backgroundColor: 'rgba(18, 32, 25, 0.65)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 35,
-  },
-  splashCardTitle: {
-    color: '#dfb15b',
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#dfb15b',
-    backgroundColor: 'rgba(223, 177, 91, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  stepNumberText: {
-    color: '#dfb15b',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  stepText: {
-    color: '#f3f4f6',
-    fontSize: 13,
-    flex: 1,
-  },
-  btnPrimary: {
-    width: '100%',
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#dfb15b',
-    alignItems: 'center',
-    shadowColor: '#dfb15b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  btnPrimaryText: {
-    color: '#111827',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
-    zIndex: 10,
-    backgroundColor: '#08100c',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerSub: {
-    color: '#9ca3af',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  map: {
-    flex: 1,
-  },
-  mapTip: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(8, 16, 12, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 30,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  mapTipText: {
-    color: '#dfb15b',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  calloutContainer: {
-    width: 200,
-    padding: 10,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-  },
-  calloutTitle: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    color: '#111827',
-  },
-  calloutPeriod: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  calloutBtn: {
-    color: '#059669',
-    fontSize: 11,
-    fontWeight: 'bold',
-    marginTop: 6,
-  },
-  cameraContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    overflow: 'hidden',
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  permissionText: {
-    color: '#9ca3af',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  scannerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scannerTarget: {
-    width: 220,
-    height: 220,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: '#dfb15b',
-    borderWidth: 4,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderBottomWidth: 0,
-    borderRightWidth: 0,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderTopWidth: 0,
-    borderRightWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-  },
-  scannerTip: {
-    padding: 20,
-    backgroundColor: '#08100c',
-  },
-  scannerTipText: {
-    color: '#9ca3af',
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  listScroll: {
-    paddingBottom: 100,
-  },
-  monumentCard: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(18, 32, 25, 0.65)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: 100,
-    height: 100,
-  },
-  cardInfo: {
-    flex: 1,
-    padding: 12,
-    justifyContent: 'center',
-  },
-  cardBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(223, 177, 91, 0.15)',
-    borderColor: '#dfb15b',
-    borderWidth: 1,
-    color: '#dfb15b',
-    fontSize: 9,
-    fontWeight: 'bold',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    marginBottom: 6,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  cardDesc: {
-    color: '#9ca3af',
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  simulatorCard: {
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(18, 32, 25, 0.65)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 16,
-    padding: 20,
-  },
-  simulatorCardText: {
-    color: '#9ca3af',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  simulatorSectionTitle: {
-    color: '#dfb15b',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-    paddingBottom: 8,
-  },
-  btnSimItem: {
+  appContainer: { flex: 1, backgroundColor: C.marble },
+  mainContainer: { flex: 1 },
+
+  // Régua de agrimensor
+  rule: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-    marginBottom: 8,
+    alignSelf: 'stretch',
+    borderTopWidth: HAIR,
+    borderTopColor: C.bronze,
+    marginVertical: 10,
   },
-  btnSimItemText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  btnSimArrow: {
-    color: '#dfb15b',
-  },
-  detailContainer: {
-    paddingBottom: 60,
-  },
-  detailsHero: {
-    height: 280,
-    position: 'relative',
-  },
-  detailHeroImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  detailHeroGradient: {
+  tick: { width: HAIR, height: 5, backgroundColor: C.bronze },
+
+  // Abertura: uma inscrição lapidar
+  splashContainer: { flex: 1, backgroundColor: C.marble, justifyContent: 'center', alignItems: 'center' },
+  splashContent: { width: '100%', maxWidth: 380, paddingHorizontal: 32 },
+  splashEyebrow: { fontFamily: F.semi, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: C.bronzeInk },
+  splashTitle: { fontFamily: F.display, fontSize: 46, letterSpacing: 6, color: C.ink, marginTop: 14 },
+  splashSubtitle: { fontFamily: F.display, fontSize: 22, letterSpacing: 2, color: C.bronzeInk },
+  splashCoord: { fontFamily: F.medium, fontSize: 11, letterSpacing: 1.4, color: C.muted },
+  splashTagline: { fontFamily: F.body, fontSize: 15, lineHeight: 24, color: C.ink, marginTop: 26 },
+  steps: { marginTop: 26 },
+  stepRow: { flexDirection: 'row', marginBottom: 12 },
+  stepNumber: { fontFamily: F.semi, fontSize: 11, color: C.bronzeInk, width: 22, marginTop: 2 },
+  stepText: { fontFamily: F.body, fontSize: 13, lineHeight: 19, color: C.muted, flex: 1 },
+  btnPrimary: { marginTop: 28, paddingVertical: 15, borderRadius: 4, backgroundColor: C.ink, alignItems: 'center' },
+  btnPrimaryText: { fontFamily: F.semi, fontSize: 13, letterSpacing: 1.4, textTransform: 'uppercase', color: C.marble },
+
+  // Cabeçalho de tela
+  header: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 14, backgroundColor: C.marble, zIndex: 10 },
+  headerTitle: { fontFamily: F.display, fontSize: 30, color: C.ink },
+  headerSub: { fontFamily: F.body, fontSize: 12, lineHeight: 17, color: C.muted },
+
+  // Mapa
+  map: { flex: 1 },
+  mapTip: {
     position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: '100%',
-    height: '60%',
-    backgroundColor: 'rgba(8,16,12,0.9)',
-    opacity: 0.9,
-    // Em produção seria gradiente, mas por simplicidade cobrimos com overlay
+    bottom: 18,
+    alignSelf: 'center',
+    backgroundColor: C.marble,
+    borderWidth: HAIR,
+    borderColor: C.bronze,
+    borderRadius: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
   },
-  btnBackCircle: {
+  mapTipText: { fontFamily: F.medium, fontSize: 11, color: C.bronzeInk },
+  callout: { width: 190, backgroundColor: C.marble, borderWidth: HAIR, borderColor: C.bronze, borderRadius: 3, padding: 11 },
+  calloutCentury: { fontFamily: F.semi, fontSize: 9, letterSpacing: 1.6, color: C.bronzeInk },
+  calloutTitle: { fontFamily: F.display, fontSize: 17, color: C.ink, marginTop: 3 },
+  calloutCoord: { fontFamily: F.medium, fontSize: 10, letterSpacing: 0.8, color: C.muted, marginTop: 4 },
+
+  // Scanner: o único lugar escuro do app, porque a câmera pede
+  cameraContainer: { flex: 1, backgroundColor: C.night, overflow: 'hidden' },
+  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  permissionText: { fontFamily: F.body, fontSize: 14, lineHeight: 22, color: '#C9C5BA', textAlign: 'center', marginBottom: 22 },
+  btnPermission: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: 4, borderWidth: HAIR, borderColor: C.bronze },
+  btnPermissionText: { fontFamily: F.semi, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: C.bronze },
+  scannerOverlay: { flex: 1, backgroundColor: 'rgba(20, 24, 22, 0.45)', justifyContent: 'center', alignItems: 'center' },
+
+  // Lista
+  listScroll: { paddingBottom: 28 },
+  card: {
+    flexDirection: 'row',
+    marginHorizontal: 24,
+    marginBottom: 14,
+    borderWidth: HAIR,
+    borderColor: C.bronze,
+    borderRadius: 4,
+    backgroundColor: WASH,
+    overflow: 'hidden',
+  },
+  cardImage: { width: 92, height: 104 },
+  cardInfo: { flex: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  cardCentury: { fontFamily: F.semi, fontSize: 9, letterSpacing: 1.8, color: C.bronzeInk },
+  cardTitle: { fontFamily: F.display, fontSize: 20, color: C.ink, marginTop: 2 },
+  cardCoord: { fontFamily: F.medium, fontSize: 10, letterSpacing: 0.9, color: C.muted, marginTop: 5 },
+
+  // Ficha do monumento
+  detailContainer: { paddingBottom: 48 },
+  hero: { height: 300 },
+  heroImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  btnBack: {
     position: 'absolute',
     top: 40,
     left: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(8, 16, 12, 0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.marble,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  btnBackCircleText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  detailHeroInfo: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-  },
-  detailBadgeText: {
-    color: '#dfb15b',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  detailHeroTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  detailContent: {
-    padding: 20,
-  },
-  audioPlayerCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(223, 177, 91, 0.1)',
-    borderColor: 'rgba(223, 177, 91, 0.25)',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  audioInfo: {
+  btnBackText: { fontFamily: F.medium, fontSize: 17, color: C.ink },
+  cartouche: { paddingHorizontal: 24, paddingTop: 22 },
+  detailEyebrow: { fontFamily: F.semi, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: C.bronzeInk },
+  detailTitle: { fontFamily: F.display, fontSize: 34, lineHeight: 38, color: C.ink, marginTop: 6 },
+  detailCoord: { fontFamily: F.medium, fontSize: 11, letterSpacing: 1.3, color: C.muted },
+  detailContent: { paddingHorizontal: 24, paddingTop: 10 },
+
+  audioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    paddingVertical: 16,
+    borderTopWidth: HAIR,
+    borderBottomWidth: HAIR,
+    borderColor: C.bronze,
   },
-  audioIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  audioTitle: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  audioStatus: {
-    color: '#9ca3af',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  btnPlay: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#dfb15b',
-  },
-  btnPlayText: {
-    color: '#111827',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 16,
-  },
-  tabBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginRight: 10,
-    position: 'relative',
-  },
-  tabBtnActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#dfb15b',
-  },
-  tabBtnText: {
-    color: '#9ca3af',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  tabBtnTextActive: {
-    color: '#dfb15b',
-  },
-  historyText: {
-    color: '#f3f4f6',
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'justify',
-  },
-  curiositiesContainer: {
-    marginTop: 4,
-  },
-  curiosityRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-  },
-  curiosityBullet: {
-    color: '#dfb15b',
-    fontWeight: 'bold',
-    marginRight: 10,
-    fontSize: 14,
-  },
-  curiosityText: {
-    color: '#f3f4f6',
-    fontSize: 13,
-    lineHeight: 18,
-    flex: 1,
-  },
-  locationCard: {
-    marginTop: 25,
-    backgroundColor: 'rgba(18, 32, 25, 0.65)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 16,
-    padding: 16,
-  },
-  locationCardTitle: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginBottom: 6,
-  },
-  locationCardDesc: {
-    color: '#9ca3af',
-    fontSize: 11,
-    lineHeight: 16,
-    marginBottom: 12,
-  },
+  audioInfo: { flex: 1 },
+  audioTitle: { fontFamily: F.semi, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: C.ink },
+  audioStatus: { fontFamily: F.body, fontSize: 12, color: C.muted, marginTop: 3 },
+  btnPlay: { paddingVertical: 9, paddingHorizontal: 20, borderRadius: 3, backgroundColor: C.bronzeInk },
+  btnPlayText: { fontFamily: F.semi, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: C.marble },
+
+  tabs: { flexDirection: 'row', marginTop: 24, marginBottom: 18 },
+  tabBtn: { marginRight: 26 },
+  tabText: { fontFamily: F.medium, fontSize: 13, color: C.muted, paddingBottom: 7 },
+  tabTextActive: { fontFamily: F.semi, color: C.ink },
+  tabRule: { height: 2, backgroundColor: 'transparent' },
+  tabRuleActive: { backgroundColor: C.bronze },
+
+  historyText: { fontFamily: F.body, fontSize: 15, lineHeight: 25, color: C.ink },
+  curiosityRow: { flexDirection: 'row', marginBottom: 16 },
+  curiosityMark: { width: 5, height: 5, backgroundColor: C.bronze, marginTop: 8, marginRight: 12 },
+  curiosityText: { fontFamily: F.body, fontSize: 14, lineHeight: 22, color: C.ink, flex: 1 },
+
+  locationBlock: { marginTop: 32, paddingTop: 18, borderTopWidth: HAIR, borderTopColor: C.bronze },
+  locationLabel: { fontFamily: F.semi, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: C.bronzeInk },
+  locationAddress: { fontFamily: F.body, fontSize: 14, lineHeight: 21, color: C.ink, marginTop: 6, marginBottom: 16 },
   btnSecondary: {
+    alignSelf: 'flex-start',
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 3,
+    borderWidth: HAIR,
+    borderColor: C.ink,
   },
-  btnSecondaryText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  btnSecondaryText: { fontFamily: F.semi, fontSize: 11, letterSpacing: 1.3, textTransform: 'uppercase', color: C.ink },
+
+  // Navegação: barra no fluxo, não pílula flutuante
   navBar: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    height: 70,
-    backgroundColor: 'rgba(8, 16, 12, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 35,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
+    height: 66,
+    paddingBottom: 6,
+    backgroundColor: C.marble,
+    borderTopWidth: HAIR,
+    borderTopColor: C.bronze,
   },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
-  },
-  navItemActive: {
-    // Pode adicionar destaque especial
-  },
-  navIcon: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  navText: {
-    color: '#9ca3af',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  navTextActive: {
-    color: '#dfb15b',
-  },
-  navScannerBtn: {
-    top: -20,
-    shadowColor: '#dfb15b',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  navScannerBtnInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#dfb15b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#08100c',
-  },
-  navScannerBtnInnerActive: {
-    backgroundColor: '#10b981',
-  },
-  scannerIconText: {
-    fontSize: 22,
-  }
+  navItem: { alignItems: 'center', paddingHorizontal: 6, paddingTop: 6 },
+  navText: { fontFamily: F.medium, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: C.muted },
+  navTextActive: { fontFamily: F.semi, color: C.ink },
+  navUnderline: { height: 2, width: 18, marginTop: 6, backgroundColor: 'transparent' },
+  navUnderlineActive: { backgroundColor: C.bronze },
+  navScanner: { width: 50, height: 50, borderRadius: 4, backgroundColor: C.bronzeInk, justifyContent: 'center', alignItems: 'center' },
+  navScannerActive: { backgroundColor: C.ink },
 });
