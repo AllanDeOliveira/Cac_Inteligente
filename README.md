@@ -66,4 +66,4 @@ Este projeto está sendo desenvolvido no âmbito de pesquisa de pós-graduação
 
 ## 📄 Licença
 
-Este projeto está licensed sob a licença **GNU General Public License v3.0 (GPLv3)** — uma licença copyleft forte que garante que o software permaneça livre e de código aberto. Qualquer trabalho derivado ou redistribuição deste projeto também deve ter seu código-fonte aberto sob os mesmos termos. Consulte o arquivo [LICENSE](file:///LICENSE) para ler os termos completos.
+Este projeto está licenciado sob a **GNU General Public License v3.0 (GPLv3)** — uma licença copyleft forte que garante que o software permaneça livre e de código aberto. Qualquer trabalho derivado ou redistribuição deste projeto também deve ter seu código-fonte aberto sob os mesmos termos. Consulte o arquivo [LICENSE](LICENSE) para ler os termos completos.
