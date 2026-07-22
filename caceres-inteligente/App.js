@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justify.content: 'space-around',
+    justifyContent: 'space-around',
     height: 72,
     paddingBottom: 8,
     backgroundColor: C.night,
