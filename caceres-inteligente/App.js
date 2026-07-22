@@ -183,7 +183,7 @@ export default function App() {
   const [selectedMonument, setSelectedMonument] = useState(null);
   const [lastScreen, setLastScreen] = useState('map');
   const [activeDetailTab, setActiveDetailTab] = useState('history');
-  
+
   // Estados para Câmera
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -306,7 +306,7 @@ export default function App() {
           <View style={styles.badgeLime}>
             <Text style={styles.badgeLimeText}>SINALIZAÇÃO URBANA E ACESSIBILIDADE</Text>
           </View>
-          
+
           <Text style={styles.splashTitle}>CÁCERES</Text>
           <Text style={styles.splashSubtitle}>GUIA INTELIGENTE</Text>
           <SignalRule />
@@ -347,9 +347,9 @@ export default function App() {
   return (
     <SafeAreaView style={styles.appContainer}>
       <StatusBar barStyle="light-content" backgroundColor={C.night} />
-      
+
       <View style={styles.mainContainer}>
-        
+
         {/* ================= TELA: MAPA ================= */}
         {currentScreen === 'map' && (
           <View style={StyleSheet.absoluteFillObject}>
@@ -494,7 +494,7 @@ export default function App() {
             </View>
 
             <View style={styles.detailContent}>
-              
+
               {/* PAINEL TÁTIL DE ÁUDIO-GUIA (BOTÃO GIGANTE DE ALTO CONTRASTE) */}
               <TouchableOpacity
                 style={[styles.btnAudioTactile, isSpeaking && styles.btnAudioTactileActive]}
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   },
   stepNumber: { fontFamily: F.semi, fontSize: 12, color: C.lime },
   stepText: { fontFamily: F.body, fontSize: 13, lineHeight: 19, color: C.white, flex: 1 },
-  
+
   // Botões Primários em Amarelo Lima
   btnPrimaryLime: {
     marginTop: 26,
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
 
   historyBox: { backgroundColor: C.panel, padding: 18, borderRadius: 6, borderWidth: 1, borderColor: C.panelBorder },
   historyText: { fontFamily: F.body, fontSize: 15, lineHeight: 25, color: C.white },
-  
+
   curiosityRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14, backgroundColor: C.panel, padding: 14, borderRadius: 6, borderWidth: 1, borderColor: C.panelBorder },
   curiosityBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: C.night, borderWidth: 1, borderColor: C.lime, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   curiosityBadgeText: { fontFamily: F.semi, fontSize: 11, color: C.lime },
